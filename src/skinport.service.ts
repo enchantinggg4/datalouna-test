@@ -22,6 +22,7 @@ export class SkinportService {
     private readonly configService: ConfigService,
     @Inject(API) private api: ApisauceInstance,
   ) {
+    if (this.configService.get<boolean>('isTestEnvironment')) return;
     // Initial population of cache
     this.initialItemsPopulation();
   }
@@ -33,7 +34,6 @@ export class SkinportService {
   private async initialItemsPopulation() {
     const cached = await this.readDataFromRedis();
 
-    console.log("CAched data:", cached?.length, this.configService.get<boolean>('isDevelopment'))
     if (this.configService.get<boolean>('isDevelopment') && cached) {
       this.logger.log(
         'Development: skipping skinport sync due to non-empty cache',
@@ -52,7 +52,14 @@ export class SkinportService {
       this.fetchItems(true),
       this.fetchItems(false),
     ]);
-    await this.mergeItemData(tradableItems, untradableItems);
+    if (!tradableItems || !untradableItems) {
+      this.logger.error(
+        "Can't merge item data: we failed tradable/untradable fetch",
+      );
+      return;
+    }
+    this.mergedItemData = this.mergeItemData(tradableItems, untradableItems);
+    await this.storeMergedData(this.mergedItemData);
     this.logger.log('Skinport data updated.');
   }
 
@@ -108,7 +115,11 @@ export class SkinportService {
   }
 
   // O(n)
-  private async mergeItemData(tr: RawItemDto[], untr: RawItemDto[]) {
+  // To discuss: what to do if skinport returns different size arrays
+  private mergeItemData(
+    tr: RawItemDto[],
+    untr: RawItemDto[],
+  ): Map<string, ItemPriceDataDto> {
     const map = new Map<string, ItemPriceDataDto>();
 
     const m1 = new Map<string, RawItemDto>(
@@ -130,8 +141,11 @@ export class SkinportService {
       });
     }
 
-    this.mergedItemData = map;
-    const mergedData = Array.from(map.values());
+    return map;
+  }
+
+  private async storeMergedData(mergedItemData: Map<string, ItemPriceDataDto>) {
+    const mergedData = Array.from(mergedItemData);
 
     await this.cacheManager.set(
       SkinportService.MERGED_ITEMS_CACHE_KEY,

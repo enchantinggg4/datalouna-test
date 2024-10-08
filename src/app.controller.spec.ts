@@ -1,63 +1,47 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { SkinportService } from './skinport.service';
-import { PrismaService } from './prisma.service';
 import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
-import { PrismaClient, Purchase } from '@prisma/client';
 import { AppMapper } from './app.mapper';
 import { ItemPriceDataDto } from './dto/item.dto';
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 describe('AppController', () => {
   let appController: AppController;
-  let appService: AppService;
-  let skinportMock: DeepMockProxy<SkinportService>;
-  let prismaMock: DeepMockProxy<PrismaClient>;
+  let appService: DeepMockProxy<AppService>;
 
   beforeEach(async () => {
-    prismaMock = mockDeep<PrismaClient>();
-    skinportMock = mockDeep<SkinportService>();
+    appService = mockDeep<AppService>();
 
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
-        AppService,
+        {
+          provide: AppService,
+          useValue: appService,
+        },
         AppMapper,
-        {
-          provide: SkinportService,
-          useValue: skinportMock,
-        },
-        {
-          provide: PrismaService,
-          useValue: prismaMock,
-        },
       ],
     }).compile();
 
     appController = app.get<AppController>(AppController);
-    appService = app.get<AppService>(AppService);
   });
 
   describe('GetItems', () => {
     it('should return empty array', () => {
-      jest
-        .spyOn(appService, 'getItems')
-        .mockImplementation(() => Promise.resolve([]));
+      appService.getItems.mockResolvedValue([]);
 
       expect(appController.getItems()).resolves.toStrictEqual([]);
     });
 
     it('should return array with mapped data', () => {
-      jest.spyOn(appService, 'getItems').mockImplementation(() =>
-        Promise.resolve<ItemPriceDataDto[]>([
-          {
-            market_hash_name: 'Ak47',
-            min_price_untradable: 0.43,
-            min_price_tradable: 0.47,
-          },
-        ]),
-      );
+      appService.getItems.mockResolvedValue([
+        {
+          market_hash_name: 'Ak47',
+          min_price_untradable: 0.43,
+          min_price_tradable: 0.47,
+        },
+      ]);
 
       expect(appController.getItems()).resolves.toStrictEqual<
         ItemPriceDataDto[]
@@ -73,36 +57,30 @@ describe('AppController', () => {
 
   describe('Purchase', () => {
     it(`should return 404 if item doesn't exist`, () => {
-      jest.spyOn(appService, 'purchaseItem').mockImplementation(() => {
-        throw new HttpException('123', HttpStatus.NOT_FOUND);
-      });
+      appService.purchaseItem.mockRejectedValue(
+        new HttpException('123', HttpStatus.NOT_FOUND),
+      );
 
       expect(
         appController.purchaseItem({
           item_market_hash_name: 'has47',
-        } as any),
+          user_id: '123',
+          tradable: false,
+        }),
       ).rejects.toBeInstanceOf(HttpException);
     });
 
     it(`should return purchased item if everything's good`, () => {
       const d = new Date(100000000);
 
-      jest
-        .spyOn(appService, 'purchaseItem')
-        .mockImplementation(
-          () => {
-            const r: Purchase & any = {
-              id: '123',
-              userId: '456',
-              itemMarketHashName: 'ak47',
-              boughtAtPrice: 0.12,
-              isTradable: false,
-              createdAt: d,
-            };
-
-            return Promise.resolve(r);
-          },
-        );
+      appService.purchaseItem.mockResolvedValue({
+        id: '123',
+        userId: '456',
+        itemMarketHashName: 'ak47',
+        boughtAtPrice: 0.12,
+        isTradable: false,
+        createdAt: d,
+      });
 
       expect(
         appController.purchaseItem({
@@ -114,6 +92,7 @@ describe('AppController', () => {
         item_market_hash_name: 'ak47',
         bought_at_price: 0.12,
         tradable: false,
+        bought_at: d,
       });
     });
   });
