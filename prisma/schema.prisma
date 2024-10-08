@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @unique
+  balance   Float      @default(0)
+  purchases Purchase[]
+
+  @@index([id])
+}
+
+model Purchase {
+  id String @unique @default(uuid())
+
+  itemMarketHashName String
+
+  boughtAtPrice Float
+  isTradable    Boolean
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  createdAt DateTime @default(now())
+
+  @@index([id])
+  @@index([userId, itemMarketHashName])
+}

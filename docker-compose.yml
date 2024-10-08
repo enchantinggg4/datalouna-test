@@ -1,0 +1,18 @@
+services:
+  db:
+    container_name: db
+    image: postgres:16.4-bookworm
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    ports:
+      - "0.0.0.0:5432:5432"
+  redis:
+    container_name: redis
+    image: redis:7.4.0-alpine
+    restart: always
+#    command: [redis-server, /usr/local/etc/redis/redis.conf]
+    ports:
+      - "0.0.0.0:6379:6379"
