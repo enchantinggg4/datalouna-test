@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ItemPriceDataDto, PurchaseItemDto } from './dto/item.dto';
 import { AppMapper } from './app.mapper';
+import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 
 @Controller('items')
 export class AppController {
@@ -10,6 +11,9 @@ export class AppController {
     private readonly appMapper: AppMapper,
   ) {}
 
+  // Subject to change
+  @CacheKey('items_controller_item_list')
+  @CacheTTL(60_000)
   @Get('/')
   public async getItems(): Promise<ItemPriceDataDto[]> {
     return this.appService.getItems();
