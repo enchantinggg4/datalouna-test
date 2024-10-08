@@ -6,7 +6,7 @@ import { PrismaService } from './prisma.service';
 import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
 import { PrismaClient, Purchase } from '@prisma/client';
 import { AppMapper } from './app.mapper';
-import { ItemPriceDataDto, UserId } from './dto/item.dto';
+import { ItemPriceDataDto } from './dto/item.dto';
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 describe('AppController', () => {
@@ -90,7 +90,7 @@ describe('AppController', () => {
       jest
         .spyOn(appService, 'purchaseItem')
         .mockImplementation(
-          (itemMarketHashName: string, userId: UserId, tradable: boolean) => {
+          () => {
             const r: Purchase & any = {
               id: '123',
               userId: '456',

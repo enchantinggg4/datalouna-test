@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { SkinportService } from './skinport.service';
 import { ItemPriceDataDto, UserId } from './dto/item.dto';
 import { PrismaService } from './prisma.service';
-import { Purchase, User } from '@prisma/client';
+import { Prisma, Purchase, User } from '@prisma/client';
 
 @Injectable()
 export class AppService {
@@ -23,54 +23,50 @@ export class AppService {
     const item = this.skinportService.getItem(itemMarketHashName);
     if (!item) throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
 
-    let existingUser: User = await this.prisma.user
-      .findUnique({
-        where: {
-          id: userId,
-        },
-      })
-      .then();
+    return this.prisma.$transaction(
+      async (tx) => {
+        const user: User = await tx.user
+          .upsert({
+            where: {
+              id: userId,
+            },
+            update: {},
+            create: {
+              id: userId,
+              balance: 10000,
+            },
+          })
+          .then();
 
-    if (!existingUser) {
-      existingUser = await this.prisma.user
-        .create({
+        const price = tradable
+          ? item.min_price_tradable
+          : item.min_price_untradable;
+
+        // For now lets think price only consists of item price
+        if (user.balance < price) {
+          throw new HttpException(
+            'Not enough funds',
+            HttpStatus.PAYMENT_REQUIRED,
+          );
+        }
+
+        // we're good and can buy things
+
+        this.prisma
+          .$queryRaw`UPDATE "User" SET balance = balance - ${price} WHERE id = ${user.id}`.then();
+
+        return this.prisma.purchase.create({
           data: {
-            id: userId,
-            balance: 10000,
+            userId: user.id,
+            itemMarketHashName,
+            boughtAtPrice: price,
+            isTradable: tradable,
           },
-        })
-        .then();
-    }
-
-    const price = tradable
-      ? item.min_price_tradable
-      : item.min_price_untradable;
-
-    // For now lets think price only consists of item price
-    if (existingUser.balance < price) {
-      throw new HttpException('Not enough funds', HttpStatus.PAYMENT_REQUIRED);
-    }
-
-    // we're good and can buy things
-
-    console.log(tradable)
-    const [purchase] = await this.prisma.$transaction([
-      this.prisma.purchase.create({
-        data: {
-          userId: existingUser.id,
-          itemMarketHashName,
-          boughtAtPrice: price,
-          isTradable: tradable,
-        },
-      }),
-      this.prisma.user.update({
-        data: { ...existingUser, balance: existingUser.balance - price },
-        where: {
-          id: existingUser.id,
-        },
-      }),
-    ]);
-
-    return purchase;
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 }

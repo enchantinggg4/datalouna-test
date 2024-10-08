@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsBoolean, IsString } from 'class-validator';
 
 export type UserId = string;
 
@@ -28,7 +28,7 @@ export class PurchaseItemDto {
 
   @IsString()
   user_id: UserId;
-  
+
   @IsBoolean()
   tradable: boolean;
 }
